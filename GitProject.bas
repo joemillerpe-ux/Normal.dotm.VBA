@@ -6,10 +6,9 @@ Option Explicit
 ' Adapted so that:
 '   - Source is Normal.dotm at:
 '       C:\Users\jmiller1\AppData\Roaming\Microsoft\Templates\Normal.dotm
-'   - Project root is:
+'   - Project root (export/import folder) is:
 '       C:\Users\jmiller1\AppData\Roaming\Microsoft\Templates\GithubNormalVBA
-'   - Export/Import folder is:
-'       <Project root>\src
+'   - No \src folder is used; files live in the repo root.
 '
 ' REQUIREMENTS:
 '   - Word Options > Trust Center > Trust Center Settings > Macro Settings:
@@ -19,9 +18,10 @@ Option Explicit
 '       * Microsoft Scripting Runtime
 '
 ' NOTES:
-'   - ExportComponentsToSourceFolder() clears the target src folder before exporting.
+'   - ExportComponentsToSourceFolder() clears ONLY prior VBA exports
+'     (.bas/.cls/.frm/.frx) in the repo root before exporting.
 '   - Document-type components (vbext_ct_Document) cannot be programmatically removed.
-'   - DangerouslyImportComponentsFromSourceFolder() imports from the same src folder.
+'   - DangerouslyImportComponentsFromSourceFolder() imports from the repo root.
 ''
 
 ' ======= PATHS (edit if needed) =======
@@ -33,14 +33,12 @@ Private Const GITHUB_NORMAL_VBA_DIR As String = _
 
 ' ======= Root Directory of this "Project" (git repo root) =======
 Public Property Get Dirname() As String
-    ' If you prefer env var style, you could replace the constant with:
-    ' Dirname = Environ$("AppData") & "\Microsoft\Templates\GithubNormalVBA"
     Dirname = GITHUB_NORMAL_VBA_DIR
 End Property
 
-' ======= Directory where all source code will be stored (./src) =======
+' ======= Directory where all source code will be stored (repo root, no \src) =======
 Public Property Get SourceDirectory() As String
-    SourceDirectory = joinPaths(Dirname, "src")
+    SourceDirectory = Dirname
 End Property
 
 ' ======= VBComponents for THIS project (Normal.dotm) =======
@@ -71,10 +69,6 @@ Public Sub InitializeProject()
     ' Ensure repo root exists
     If Not fso.FolderExists(Dirname) Then
         fso.CreateFolder Dirname
-    End If
-    ' Ensure ./src exists
-    If Not fso.FolderExists(SourceDirectory) Then
-        fso.CreateFolder SourceDirectory
     End If
 
     ' Create a default .gitignore if missing
@@ -131,7 +125,7 @@ Private Function componentExists(ByVal filename As String) As Boolean
     Next index
 End Function
 
-' ======= Export all modules from Normal.dotm into ./src =======
+' ======= Export all modules from Normal.dotm into repo root (no \src) =======
 Public Sub ExportComponentsToSourceFolder()
     Dim fso As New Scripting.FileSystemObject
 
@@ -141,15 +135,19 @@ Public Sub ExportComponentsToSourceFolder()
                "Proceeding to export from the Normal template currently loaded.", vbExclamation
     End If
 
-    ' Ensure ./src exists; clear it
+    ' Ensure repo root exists
     If Not fso.FolderExists(SourceDirectory) Then
         fso.CreateFolder SourceDirectory
-    Else
-        Dim file As Scripting.file
-        For Each file In fso.GetFolder(SourceDirectory).Files
-            file.Delete True
-        Next file
     End If
+
+    ' Clear ONLY prior VBA export files to avoid nuking other repo files
+    Dim file As Scripting.file
+    For Each file In fso.GetFolder(SourceDirectory).Files
+        Select Case LCase$(fso.GetExtensionName(file.name))
+            Case "bas", "cls", "frm", "frx"
+                file.Delete True
+        End Select
+    Next file
 
     ' Export each component
     Dim index As Long
@@ -164,9 +162,9 @@ Public Sub ExportComponentsToSourceFolder()
     MsgBox "Export complete. Components saved to:" & vbCrLf & SourceDirectory, vbInformation
 End Sub
 
-' ======= Import from ./src into Normal.dotm (DESTRUCTIVE) =======
+' ======= Import from repo root into Normal.dotm (DESTRUCTIVE) =======
 Public Sub DangerouslyImportComponentsFromSourceFolder()
-    If MsgBox("Are you sure you want to import from the source folder (./src)? " & _
+    If MsgBox("Are you sure you want to import from the repository root? " & _
               "Existing modules may be removed. Continue?", vbYesNo + vbExclamation) = vbNo Then
         Exit Sub
     End If
