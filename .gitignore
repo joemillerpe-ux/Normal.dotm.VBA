@@ -1,0 +1,7 @@
+# Packages
+node_modules
+
+# Word backup/lock files
+~$*.do*
+*.asd
+*.wbk
